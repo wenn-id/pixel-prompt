@@ -3,11 +3,9 @@
 namespace App\Livewire\Prompt;
 
 use App\Models\ApiKey;
-use App\Models\Image;
 use App\Models\Prompt;
 use App\Models\Tag;
 use Illuminate\Support\Facades\Crypt;
-use Illuminate\Support\Facades\Log;
 use Livewire\Component;
 use Illuminate\Support\Str;
 
@@ -59,7 +57,6 @@ class PromptCreate extends Component
                 ->where('is_active', true)
                 ->firstOrFail();
 
-            // Create the prompt record first
             $prompt = Prompt::create([
                 'user_id' => auth()->id(),
                 'title' => $this->title ?: substr($this->prompt_text, 0, 60),
@@ -75,7 +72,6 @@ class PromptCreate extends Component
                 'model' => $this->model,
             ]);
 
-            // Apply tags
             if ($this->tags_input) {
                 $tagNames = array_map('trim', explode(',', $this->tags_input));
                 foreach ($tagNames as $tagName) {
@@ -89,7 +85,6 @@ class PromptCreate extends Component
                 }
             }
 
-            // Dispatch generation job
             $job = new \App\Jobs\GenerateImage(
                 $prompt,
                 Crypt::decryptString($apiKey->key_encrypted),

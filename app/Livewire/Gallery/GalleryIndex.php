@@ -57,15 +57,21 @@ class GalleryIndex extends Component
         }
 
         $sortMap = [
-            'latest' => [fn($q) => $q->latest()],
-            'oldest' => [fn($q) => $q->oldest()],
-            'favorite' => [fn($q) => $q->orderBy('is_favorite', 'desc')->latest()],
+            'latest' => ['column' => 'created_at', 'dir' => 'desc'],
+            'oldest' => ['column' => 'created_at', 'dir' => 'asc'],
+            'favorite' => ['column' => 'is_favorite', 'dir' => 'desc'],
         ];
-        $query->when($sortMap[$this->sort] ?? $sortMap['latest'], fn($q) => $q);
+        $sort = $sortMap[$this->sort] ?? $sortMap['latest'];
+        $query->orderBy($sort['column'], $sort['dir']);
+
+        if ($this->sort === 'favorite') {
+            $query->latest();
+        }
 
         $images = $query->paginate(24);
         $providers = Image::where('user_id', $user->id)
-            ->distinct('provider')
+            ->select('provider')
+            ->distinct()
             ->pluck('provider')
             ->filter();
         $tags = Tag::whereHas('images', fn($q) => $q->where('user_id', $user->id))
