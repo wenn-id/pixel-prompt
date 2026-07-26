@@ -1,0 +1,68 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+    body {
+        @apply bg-slate-950 text-slate-100 antialiased;
+    }
+
+    ::selection {
+        @apply bg-indigo-500/30 text-white;
+    }
+
+    ::-webkit-scrollbar {
+        @apply w-1.5;
+    }
+    ::-webkit-scrollbar-track {
+        @apply bg-slate-900;
+    }
+    ::-webkit-scrollbar-thumb {
+        @apply bg-slate-700 rounded-full;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+        @apply bg-slate-600;
+    }
+}
+
+@layer components {
+    .card {
+        @apply bg-slate-900 border border-slate-800 rounded-xl;
+    }
+    .card-hover {
+        @apply card hover:border-slate-700 transition;
+    }
+}
+
+@layer utilities {
+    .masonry-grid {
+        columns: 2;
+        column-gap: 0.75rem;
+    }
+    @screen sm {
+        .masonry-grid { columns: 3; }
+    }
+    @screen lg {
+        .masonry-grid { columns: 4; }
+    }
+    @screen xl {
+        .masonry-grid { columns: 5; }
+    }
+    .masonry-item {
+        break-inside: avoid;
+        margin-bottom: 0.75rem;
+    }
+}
+
+/* Pagination styling */
+nav[aria-label="Pagination Navigation"] span[aria-current="page"] span {
+    @apply bg-indigo-600 text-white border-indigo-600 !important;
+}
+nav[aria-label="Pagination Navigation"] a, nav[aria-label="Pagination Navigation"] span {
+    @apply border-slate-700 text-slate-400 bg-transparent hover:bg-slate-800 !important;
+}
+
+/* Skeleton loading */
+.skeleton {
+    @apply bg-slate-800 animate-pulse rounded-lg;
+}
