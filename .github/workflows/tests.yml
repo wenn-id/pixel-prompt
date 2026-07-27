@@ -14,7 +14,11 @@ jobs:
           POSTGRES_PASSWORD: postgres
         ports:
           - 5432:5432
-        options: --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
 
     steps:
       - uses: actions/checkout@v4
@@ -26,12 +30,24 @@ jobs:
         with:
           node-version: 22
           cache: npm
+
+      - name: Prepare Laravel directories
+        run: |
+          mkdir -p storage/framework/cache/data
+          mkdir -p storage/framework/views
+          mkdir -p storage/framework/sessions
+          mkdir -p storage/logs
+
       - run: composer install --no-interaction --prefer-dist
       - run: npm ci
       - run: npm run build
       - run: cp .env.example .env
       - run: php artisan key:generate
       - run: |
-          sed -i             -e 's/DB_USERNAME=.*/DB_USERNAME=postgres/'             -e 's/DB_PASSWORD=.*/DB_PASSWORD=postgres/'             -e 's/DB_DATABASE=.*/DB_DATABASE=pixel_prompt_test/'             .env
+          sed -i \
+            -e 's/DB_USERNAME=.*/DB_USERNAME=postgres/' \
+            -e 's/DB_PASSWORD=.*/DB_PASSWORD=postgres/' \
+            -e 's/DB_DATABASE=.*/DB_DATABASE=pixel_prompt_test/' \
+            .env
       - run: php artisan migrate --env=testing
       - run: php artisan test --compact
