@@ -28,7 +28,7 @@ jobs:
           extensions: pgsql, mbstring, xml, curl, gd, fileinfo, bcmath
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
 
       - name: Prepare Laravel directories
