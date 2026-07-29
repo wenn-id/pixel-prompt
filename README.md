@@ -28,7 +28,7 @@ PixelPrompt is an open-source SaaS platform for managing AI image generation pro
 ## Quick Start
 
 ```bash
-git clone https://github.com/alwan-juliawan/pixel-prompt
+git clone https://github.com/wenn-id/pixel-prompt
 cd pixel-prompt
 
 cp .env.example .env
