@@ -2,31 +2,38 @@
 
 namespace App\Jobs;
 
-use App\Models\Prompt;
+use App\Models\ApiKey;
 use App\Models\Image;
-use App\Models\Tag;
+use App\Models\Prompt;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
+use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Intervention\Image\ImageManager;
 
 class GenerateImage implements ShouldQueue
 {
     use Queueable;
 
     public Prompt $prompt;
-    public string $apiKey;
+
+    public int $apiKeyId;
+
     public array $params;
 
+    private string $apiKey;
+
     public int $timeout = 300;
+
     public int $tries = 2;
 
-    public function __construct(Prompt $prompt, string $apiKey, array $params = [])
+    public function __construct(Prompt $prompt, int $apiKeyId, array $params = [])
     {
         $this->prompt = $prompt;
-        $this->apiKey = $apiKey;
+        $this->apiKeyId = $apiKeyId;
         $this->params = $params;
     }
 
@@ -36,6 +43,15 @@ class GenerateImage implements ShouldQueue
         $provider = $this->prompt->provider;
         $model = $this->prompt->model;
         $promptText = $this->prompt->prompt_text;
+        $this->apiKey = Crypt::decryptString(
+            ApiKey::query()
+                ->whereKey($this->apiKeyId)
+                ->where('user_id', $this->prompt->user_id)
+                ->where('provider', $provider)
+                ->where('is_active', true)
+                ->firstOrFail()
+                ->key_encrypted
+        );
 
         $imageData = match ($provider) {
             'openai' => $this->callOpenAI($model, $promptText),
@@ -45,20 +61,20 @@ class GenerateImage implements ShouldQueue
             default => throw new \Exception("Unknown provider: {$provider}"),
         };
 
-        $genTime = (int)((microtime(true) - $startTime) * 1000);
+        $genTime = (int) ((microtime(true) - $startTime) * 1000);
 
         // Download image
         $imageContent = Http::timeout(60)->get($imageData['url'])->body();
         $ext = $imageData['format'] ?? 'png';
-        $filename = Str::random(32) . '.' . $ext;
-        $thumbFilename = 'thumb_' . $filename;
+        $filename = Str::random(32).'.'.$ext;
+        $thumbFilename = 'thumb_'.$filename;
 
         $disk = Storage::disk(config('filesystems.default'));
         $disk->put("images/{$filename}", $imageContent);
 
         // Create thumbnail - resize if intervention/image available
         try {
-            $img = \Intervention\Image\ImageManager::imagick()->read($imageContent);
+            $img = ImageManager::imagick()->read($imageContent);
             $img->scaleDown(width: 400);
             $disk->put("images/{$thumbFilename}", $img->encodeByExtension($ext, quality: 80));
         } catch (\Exception $e) {
@@ -101,6 +117,7 @@ class GenerateImage implements ShouldQueue
             ])->throw();
 
         $data = $response->json();
+
         return [
             'url' => $data['data'][0]['url'],
             'format' => 'png',
@@ -137,15 +154,16 @@ class GenerateImage implements ShouldQueue
                 break;
             }
             if ($status['status'] === 'failed') {
-                throw new \Exception("Replicate generation failed: " . ($status['error'] ?? 'unknown'));
+                throw new \Exception('Replicate generation failed: '.($status['error'] ?? 'unknown'));
             }
         }
 
-        if (!$output) {
+        if (! $output) {
             throw new \Exception('Replicate generation timed out');
         }
 
         $url = is_array($output) ? $output[0] : $output;
+
         return ['url' => $url, 'format' => 'png'];
     }
 
@@ -162,7 +180,7 @@ class GenerateImage implements ShouldQueue
             'Authorization' => "Bearer {$this->apiKey}",
             'Accept' => 'application/json',
         ])->timeout(120)
-            ->post("https://api.stability.ai/v2beta/stable-image/generate/sd3", [
+            ->post('https://api.stability.ai/v2beta/stable-image/generate/sd3', [
                 'prompt' => $prompt,
                 'output_format' => 'png',
                 'width' => $this->prompt->width ?? 1024,
@@ -172,6 +190,7 @@ class GenerateImage implements ShouldQueue
             ])->throw();
 
         $data = $response->json();
+
         return [
             'url' => $data['image'] ?? $data['artifacts'][0]['base64'],
             'format' => 'png',
@@ -192,6 +211,7 @@ class GenerateImage implements ShouldQueue
             ])->throw();
 
         $data = $response->json();
+
         return [
             'url' => $data['data'][0]['url'] ?? $data['data'][0]['b64_json'],
             'format' => 'png',
@@ -203,8 +223,13 @@ class GenerateImage implements ShouldQueue
         $w = $width ?? 1024;
         $h = $height ?? 1024;
 
-        if ($w <= 512 && $h <= 512) return '512x512';
-        if ($w <= 1024 && $h <= 1024) return '1024x1024';
+        if ($w <= 512 && $h <= 512) {
+            return '512x512';
+        }
+        if ($w <= 1024 && $h <= 1024) {
+            return '1024x1024';
+        }
+
         return '1792x1024';
     }
 

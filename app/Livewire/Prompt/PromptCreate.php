@@ -2,29 +2,43 @@
 
 namespace App\Livewire\Prompt;
 
+use App\Jobs\GenerateImage;
 use App\Models\ApiKey;
 use App\Models\Prompt;
 use App\Models\Tag;
-use Illuminate\Support\Facades\Crypt;
-use Livewire\Component;
 use Illuminate\Support\Str;
+use Livewire\Component;
 
 class PromptCreate extends Component
 {
     public $title = '';
+
     public $prompt_text = '';
+
     public $negative_prompt = '';
+
     public $provider = '';
+
     public $model = '';
+
     public $width = 1024;
+
     public $height = 1024;
+
     public $cfg_scale = 7.0;
+
     public $steps = 30;
+
     public $seed;
+
     public $style_preset = '';
+
     public $tags_input = '';
+
     public $is_generating = false;
+
     public $generated_image_id = null;
+
     public $generation_error = null;
 
     public $available_models = [
@@ -85,9 +99,9 @@ class PromptCreate extends Component
                 }
             }
 
-            $job = new \App\Jobs\GenerateImage(
+            $job = new GenerateImage(
                 $prompt,
-                Crypt::decryptString($apiKey->key_encrypted),
+                $apiKey->id,
                 [
                     'width' => $this->width,
                     'height' => $this->height,
@@ -99,6 +113,7 @@ class PromptCreate extends Component
             dispatch($job);
 
             $this->dispatch('generation-started', promptId: $prompt->id);
+
             return redirect()->route('gallery.index')->with('status', 'generation-queued');
         } catch (\Exception $e) {
             $this->generation_error = $e->getMessage();
