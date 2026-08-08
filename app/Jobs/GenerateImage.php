@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Intervention\Image\Drivers\Gd\Driver as GdDriver;
 use Intervention\Image\ImageManager;
 
 class GenerateImage implements ShouldQueue
@@ -74,10 +75,10 @@ class GenerateImage implements ShouldQueue
 
         // Create thumbnail - resize if intervention/image available
         try {
-            $img = ImageManager::imagick()->read($imageContent);
+            $img = ImageManager::usingDriver(GdDriver::class)->decodeBinary($imageContent);
             $img->scaleDown(width: 400);
-            $disk->put("images/{$thumbFilename}", $img->encodeByExtension($ext, quality: 80));
-        } catch (\Exception $e) {
+            $disk->put("images/{$thumbFilename}", $img->encodeUsingFileExtension($ext, quality: 80));
+        } catch (\Throwable $e) {
             // Fallback: use original as thumbnail
             $disk->put("images/{$thumbFilename}", $imageContent);
             Log::warning("Thumbnail creation failed: {$e->getMessage()}");

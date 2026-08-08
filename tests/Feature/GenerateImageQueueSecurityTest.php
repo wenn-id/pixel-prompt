@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Jobs\GenerateImage;
 use App\Livewire\Prompt\PromptCreate;
 use App\Models\ApiKey;
+use App\Models\Image;
 use App\Models\User;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -12,6 +13,7 @@ use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Facades\Storage;
 use Livewire\Livewire;
 use Tests\TestCase;
 
@@ -25,7 +27,7 @@ class GenerateImageQueueSecurityTest extends TestCase
         $user = User::factory()->create();
         $secret = 'queue-plaintext-secret-marker';
 
-        ApiKey::create([
+        $apiKey = ApiKey::create([
             'user_id' => $user->id,
             'provider' => 'openai',
             'label' => 'Primary',
@@ -41,11 +43,54 @@ class GenerateImageQueueSecurityTest extends TestCase
             ->set('model', 'dall-e-3')
             ->call('generate');
 
-        Queue::assertPushed(GenerateImage::class, function (GenerateImage $job) use ($secret): bool {
-            $this->assertStringNotContainsString($secret, serialize($job));
+        Queue::assertPushed(GenerateImage::class, function (GenerateImage $job) use ($apiKey, $secret): bool {
+            $serialized = serialize($job);
+
+            $this->assertSame($apiKey->id, $job->apiKeyId);
+            $this->assertStringNotContainsString($secret, $serialized);
+            $this->assertStringNotContainsString($apiKey->key_encrypted, $serialized);
 
             return true;
         });
+    }
+
+    public function test_worker_creates_thumbnail_with_intervention_v4(): void
+    {
+        Storage::fake('local');
+        $user = User::factory()->create();
+        $apiKey = ApiKey::create([
+            'user_id' => $user->id,
+            'provider' => 'openai',
+            'label' => 'Primary',
+            'key_encrypted' => Crypt::encryptString('thumbnail-secret'),
+            'is_active' => true,
+        ]);
+        $prompt = $user->prompts()->create([
+            'prompt_text' => 'Create a thumbnail',
+            'provider' => 'openai',
+            'model' => 'dall-e-3',
+            'width' => 800,
+            'height' => 400,
+        ]);
+        $source = imagecreatetruecolor(800, 400);
+        ob_start();
+        imagepng($source);
+        $png = ob_get_clean();
+
+        Http::fake([
+            'api.openai.com/*' => Http::response([
+                'data' => [['url' => 'https://images.example/generated.png']],
+            ]),
+            'images.example/*' => Http::response($png, 200, ['Content-Type' => 'image/png']),
+        ]);
+
+        (new GenerateImage($prompt, $apiKey->id))->handle();
+
+        $image = Image::firstOrFail();
+        Storage::disk('local')->assertExists($image->thumbnail_path);
+        $thumbnailSize = getimagesizefromstring(Storage::disk('local')->get($image->thumbnail_path));
+        $this->assertSame(400, $thumbnailSize[0]);
+        $this->assertSame(200, $thumbnailSize[1]);
     }
 
     public function test_worker_resolves_and_decrypts_api_key_at_runtime(): void
